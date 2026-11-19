@@ -1,0 +1,225 @@
+---
+import { getCollection, render } from 'astro:content';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { withBase } from '../utils/url';
+import { slugify } from '../utils/slug';
+
+const products = await getCollection('produkty');
+const sections = (await getCollection('sekcjeProduktow')).sort(
+  (a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title, 'pl')
+);
+
+type ProductEntry = (typeof products)[number];
+
+const productsById = new Map(products.map((entry) => [entry.id, entry]));
+const problems: string[] = [];
+const entriesBySection = new Map<string, ProductEntry[]>();
+
+for (const section of sections) {
+  if (section.data.display !== 'cards') continue;
+
+  const seen = new Set<string>();
+  const entries: ProductEntry[] = [];
+
+  for (const slug of section.data.items) {
+    if (seen.has(slug)) {
+      problems.push(
+        `Product "${slug}" is listed more than once in section "${section.data.title}".`
+      );
+      continue;
+    }
+    seen.add(slug);
+
+    const entry = productsById.get(slug);
+    if (!entry) {
+      problems.push(
+        `Section "${section.data.title}" references missing product "${slug}".`
+      );
+      continue;
+    }
+
+    entries.push(entry);
+  }
+
+  entriesBySection.set(section.id, entries);
+}
+
+if (problems.length > 0) {
+  throw new Error(`Invalid product sections:\n- ${problems.join('\n- ')}`);
+}
+
+// A product can appear in several sections, so render one dialog per unique
+// product instead of once per card.
+const displayedProducts = new Map<string, ProductEntry>();
+for (const entries of entriesBySection.values()) {
+  for (const entry of entries) displayedProducts.set(entry.id, entry);
+}
+
+const productDialogs = await Promise.all(
+  Array.from(displayedProducts.values()).map(async (entry) => ({
+    entry,
+    Content: (await render(entry)).Content,
+    hasContent: Boolean(entry.body?.trim()),
+    dialogId: `produkt-${slugify(entry.id)}`,
+  }))
+);
+---
+
+<SiteLayout title="Polecane produkty — Natalia i Donat Cupiał">
+  <PageHeader
+    eyebrow="Polecane produkty"
+    title="Rzeczy, którym ufamy"
+    lead="Przykładowe substancje i preparaty, które omawiamy z pacjentami przy zdrowiu jelit, odporności i regeneracji. Zachęcamy do własnego researchu."
+  />
+
+  <section class="section site-container">
+    <p class="prod-note reveal">
+      Materiał ma charakter informacyjny i nie zastępuje konsultacji lekarskiej. Probiotyki działają
+      szczepowo-specyficznie, a dobór preparatu i dawek warto omówić z lekarzem.
+    </p>
+
+    {sections.map((section) => {
+      const entries = entriesBySection.get(section.id) ?? [];
+
+      return (
+        <div
+          class="prod-section"
+          data-section={section.id}
+          data-display={section.data.display}
+        >
+          <h2 class="sub-title">{section.data.title}</h2>
+          {section.data.description && <p class="prod-lead">{section.data.description}</p>}
+
+          {section.data.display === 'cards' ? (
+            entries.length === 0 ? (
+              <p class="prod-empty">Brak produktów w tej sekcji.</p>
+            ) : (
+              <div class="prod-grid reveal">
+                {entries.map((entry) => (
+                  <article class="prod-card">
+                    {entry.data.image && (
+                      <img
+                        src={withBase(entry.data.image)}
+                        alt={entry.data.imageAlt ?? ''}
+                        class="prod-card-img"
+                        loading="lazy"
+                      />
+                    )}
+                    <div class="prod-card-body">
+                      <h3>{entry.data.title}</h3>
+                      {entry.data.examples && (
+                        <span class="prod-eg">{entry.data.examples}</span>
+                      )}
+                      {entry.data.summary && <p>{entry.data.summary}</p>}
+                      <span class="prod-card-more" aria-hidden="true">
+                        Zobacz więcej →
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      class="prod-card-open"
+                      aria-haspopup="dialog"
+                      aria-controls={`produkt-${slugify(entry.id)}`}
+                      aria-label={`Otwórz szczegóły: ${entry.data.title}`}
+                      data-dialog={`produkt-${slugify(entry.id)}`}
+                    />
+                  </article>
+                ))}
+              </div>
+            )
+          ) : (
+            <div class="table-wrap reveal">
+              <table class="prod-table">
+                <thead>
+                  <tr>
+                    {section.data.columns.map((column) => (
+                      <th>{column}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {section.data.rows.map((row) => (
+                    <tr>
+                      {row.cells.map((cell) => (
+                        <td>{cell}</td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      );
+    })}
+  </section>
+
+  {productDialogs.map(({ entry, Content, hasContent, dialogId }) => (
+    <dialog class="prod-modal" id={dialogId} aria-labelledby={`${dialogId}-title`}>
+      <button
+        type="button"
+        class="prod-modal-close"
+        aria-label="Zamknij szczegóły produktu"
+        data-close-dialog
+      >
+        <span aria-hidden="true">×</span>
+      </button>
+
+      <div class="prod-modal-scroll">
+        {entry.data.image && (
+          <img
+            src={withBase(entry.data.image)}
+            alt={entry.data.imageAlt ?? ''}
+            class="prod-modal-img"
+            loading="lazy"
+          />
+        )}
+
+        <div class="prod-modal-body">
+          <h2 id={`${dialogId}-title`}>{entry.data.title}</h2>
+          {entry.data.examples && <p class="prod-modal-eg">{entry.data.examples}</p>}
+          {entry.data.summary && <p class="prod-modal-summary">{entry.data.summary}</p>}
+
+          {entry.data.details.length > 0 && (
+            <dl class="prod-modal-details">
+              {entry.data.details.map((detail) => (
+                <div>
+                  <dt>{detail.label}</dt>
+                  <dd>{detail.value}</dd>
+                </div>
+              ))}
+            </dl>
+          )}
+
+          {hasContent && (
+            <div class="prod-modal-content rich-text">
+              <Content />
+            </div>
+          )}
+
+          {entry.data.link && (
+            <a
+              class="btn-primary prod-modal-link"
+              href={entry.data.link}
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {entry.data.linkLabel}
+            </a>
+          )}
+        </div>
+      </div>
+    </dialog>
+  ))}
+
+  <script>
+    import { initModalGroup } from '../scripts/modals';
+
+    initModalGroup({
+      dialogSelector: 'dialog.prod-modal',
+      triggerSelector: '.prod-card-open',
+      getDialogId: (button) => button.dataset.dialog,
+    });
+  </script>
+</SiteLayout>

@@ -1,0 +1,25 @@
+---
+interface Props {
+  eyebrow: string;
+  title: string;
+  lead?: string;
+}
+
+const { eyebrow, title, lead } = Astro.props;
+const hasAside = Astro.slots.has('aside');
+---
+
+<header class:list={['page-header', { 'page-header-with-aside': hasAside }]}>
+  <div class="site-container page-header-inner">
+    <div class="page-header-body">
+      <p class="eyebrow">{eyebrow}</p>
+      <h1>{title}</h1>
+      {lead && <p class="lead">{lead}</p>}
+    </div>
+    {hasAside && (
+      <div class="page-header-aside">
+        <slot name="aside" />
+      </div>
+    )}
+  </div>
+</header>

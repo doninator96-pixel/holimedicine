@@ -1,0 +1,96 @@
+---
+import Layout from './Layout.astro';
+import Nav from '../components/Nav.astro';
+import Footer from '../components/Footer.astro';
+
+interface Props {
+  title?: string;
+  description?: string;
+  /** Fix the nav to the viewport so a full-bleed hero can start at the top edge. */
+  navOverlay?: boolean;
+}
+
+const { title, description, navOverlay = false } = Astro.props;
+---
+
+<Layout title={title} description={description}>
+  <Nav overlay={navOverlay} />
+  <slot />
+  <Footer />
+
+  <script>
+    const yearEl = document.getElementById('year');
+    if (yearEl) yearEl.textContent = String(new Date().getFullYear());
+
+    const navToggle = document.getElementById('navToggle');
+    const navMobile = document.getElementById('navMobile');
+    if (navToggle && navMobile) {
+      navToggle.addEventListener('click', () => {
+        navMobile.classList.toggle('open');
+      });
+      navMobile.querySelectorAll('a').forEach((a) => {
+        a.addEventListener('click', () => navMobile.classList.remove('open'));
+      });
+    }
+
+    const sectionIds = ['o-nas', 'podejscie', 'zakres', 'kontakt'];
+    const sections = sectionIds
+      .map((id) => document.getElementById(id))
+      .filter((el) => el !== null);
+
+    if (sections.length > 0) {
+      const nav = document.querySelector('.nav');
+      const sectionLinks = document.querySelectorAll('[data-nav-section]');
+      let frame = 0;
+
+      const updateActiveSection = () => {
+        frame = 0;
+        const offset = (nav ? nav.clientHeight : 0) + 24;
+        let active = null;
+
+        for (const section of sections) {
+          if (section.getBoundingClientRect().top - offset <= 0) {
+            active = section.id;
+          }
+        }
+
+        if (active === 'kontakt') active = null;
+
+        sectionLinks.forEach((link) => {
+          if (link.getAttribute('data-nav-section') === active) {
+            link.setAttribute('aria-current', 'location');
+          } else {
+            link.removeAttribute('aria-current');
+          }
+        });
+      };
+
+      const scheduleUpdate = () => {
+        if (!frame) frame = window.requestAnimationFrame(updateActiveSection);
+      };
+
+      window.addEventListener('scroll', scheduleUpdate, { passive: true });
+      window.addEventListener('resize', scheduleUpdate, { passive: true });
+      updateActiveSection();
+    }
+
+    const prefersReduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const revealEls = document.querySelectorAll('.reveal');
+    if (prefersReduced) {
+      revealEls.forEach((el) => el.classList.add('reveal-visible'));
+    } else {
+      const obs = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('reveal-visible');
+              obs.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.15 }
+      );
+      revealEls.forEach((el) => obs.observe(el));
+    }
+  </script>
+</Layout>

@@ -1,0 +1,131 @@
+---
+import { getEntry, render } from 'astro:content';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import HeroBanner from '../components/HeroBanner.astro';
+import { withBase } from '../utils/url';
+
+const aboutEntry = await getEntry('about', 'index');
+const podejscieEntry = await getEntry('podejscie', 'index');
+const zakresEntry = await getEntry('zakres', 'index');
+const contactEntry = await getEntry('contact', 'index');
+
+if (!aboutEntry || !podejscieEntry || !zakresEntry || !contactEntry) {
+  throw new Error('Brak treści strony głównej w CMS.');
+}
+
+const { Content: Mission } = await render(aboutEntry);
+const { Content: ApproachIntro } = await render(podejscieEntry);
+
+const about = aboutEntry.data;
+const podejscie = podejscieEntry.data;
+const zakres = zakresEntry.data;
+const contact = contactEntry.data;
+---
+
+<SiteLayout
+  title="Natalia i Donat Cupiał — holimedicine.eu.org"
+  description="Medycyna rodzinna i holistyczne podejście do zdrowia. Natalia i Donat Cupiał."
+  navOverlay
+>
+  <!-- HERO -->
+  <HeroBanner />
+
+  <!-- O NAS -->
+  <section class="section site-container" id="o-nas">
+    <div class="section-head reveal">
+      <p class="eyebrow">{about.eyebrow}</p>
+      <h2>{about.heading}</h2>
+    </div>
+
+    <div class="mission reveal">
+      <Mission />
+    </div>
+
+    {about.photo && (
+      <div class="couple-photo-wrap reveal">
+        <img src={withBase(about.photo)} alt={about.photoAlt ?? ''} loading="lazy" />
+      </div>
+    )}
+
+    <div class="profiles-grid reveal">
+      {about.profiles.map((profile) => (
+        <div class="profile-card">
+          <div class="role">{profile.role}</div>
+          <h3>{profile.name}</h3>
+          <p>{profile.bio}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- PODEJŚCIE -->
+  <section class="section site-container" id="podejscie">
+    <div class="section-head reveal">
+      <p class="eyebrow">{podejscie.eyebrow}</p>
+      <h2>{podejscie.heading}</h2>
+      <ApproachIntro />
+    </div>
+    <div class="phil-grid">
+      {podejscie.pillars.map((pillar) => (
+        <div class="phil-card reveal">
+          <h3>{pillar.title}</h3>
+          <p>{pillar.body}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- ZAKRES OPIEKI -->
+  <section class="section site-container" id="zakres">
+    <div class="section-head reveal">
+      <p class="eyebrow">{zakres.eyebrow}</p>
+      <h2>{zakres.heading}</h2>
+    </div>
+    <div class="services-grid reveal">
+      {zakres.items.map((item) => (
+        <div class="service-item">
+          <h3>{item.title}</h3>
+          <p>{item.body}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <!-- KONTAKT -->
+  <section class="section site-container" id="kontakt">
+    <div class="contact-box reveal">
+      <h2>{contact.heading}</h2>
+      <p>{contact.lead}</p>
+
+      <details class="contact-faq visit-faq">
+        <summary>{contact.visitQuestion}</summary>
+        <p>{contact.visitAnswer}</p>
+      </details>
+
+      {contact.pricingItems.length > 0 && (
+        <details class="contact-faq pricing">
+          <summary>{contact.pricingHeading}</summary>
+          <ul>
+            {contact.pricingItems.map((item) => (
+              <li>
+                <span>{item.name}</span>
+                <span>{item.price}</span>
+              </li>
+            ))}
+          </ul>
+        </details>
+      )}
+
+      <div class="contact-meta">
+        <div><strong>Telefon</strong>{contact.phone}</div>
+        <div><strong>E-mail</strong>{contact.email}</div>
+        <div><strong>Gabinet</strong>{contact.address}</div>
+      </div>
+      <div class="hero-actions justify-center mt-8">
+        <a href={contact.primaryCtaHref} class="btn-primary">{contact.primaryCtaLabel}</a>
+        <a href={contact.secondaryCtaHref} class="btn-secondary">{contact.secondaryCtaLabel}</a>
+      </div>
+    </div>
+  </section>
+
+</SiteLayout>

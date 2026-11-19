@@ -1,0 +1,88 @@
+---
+import { getCollection, render } from 'astro:content';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { slugify } from '../utils/slug';
+
+const entries = (await getCollection('edukacja')).sort((a, b) => a.data.order - b.data.order);
+
+const articles = await Promise.all(
+  entries.map(async (entry) => ({
+    entry,
+    Content: (await render(entry)).Content,
+    hasContent: Boolean(entry.body?.trim()),
+    dialogId: `edukacja-${slugify(entry.id)}`,
+  }))
+);
+---
+
+<SiteLayout title="Baza wiedzy — Natalia i Donat Cupiał">
+  <PageHeader
+    eyebrow="Baza wiedzy"
+    title="Materiały, które poszerzają świadomość"
+    lead="Krótkie, przystępne wyjaśnienia tematów, o które pytają nas pacjenci. Sekcja będzie się stopniowo rozrastać."
+  />
+
+  <section class="section site-container">
+    <p class="edu-disclaimer reveal">
+      Poniższe materiały mają charakter edukacyjny i nie zastępują indywidualnej konsultacji
+      lekarskiej. Kliknij kafelek, aby przeczytać całą treść.
+    </p>
+
+    <div class="edu-grid reveal">
+      {articles.map(({ entry, dialogId }) => (
+        <article class="edu-card">
+          <h3 class="edu-card-title">{entry.data.title}</h3>
+          {entry.data.teaser && <p class="edu-card-teaser">{entry.data.teaser}</p>}
+          <span class="edu-card-more" aria-hidden="true">Czytaj więcej →</span>
+          <button
+            type="button"
+            class="edu-card-open"
+            aria-haspopup="dialog"
+            aria-controls={dialogId}
+            aria-label={`Otwórz pełną treść: ${entry.data.title}`}
+            data-dialog={dialogId}
+          />
+        </article>
+      ))}
+    </div>
+  </section>
+
+  {articles.map(({ entry, Content, hasContent, dialogId }) => (
+    <dialog class="edu-modal" id={dialogId} aria-labelledby={`${dialogId}-title`}>
+      <button
+        type="button"
+        class="edu-modal-close"
+        aria-label="Zamknij materiał"
+        data-close-dialog
+      >
+        <span aria-hidden="true">×</span>
+      </button>
+
+      <div class="edu-modal-scroll">
+        <div class="edu-modal-body">
+          <h2 id={`${dialogId}-title`}>{entry.data.title}</h2>
+          {entry.data.teaser && <p class="edu-modal-summary">{entry.data.teaser}</p>}
+
+          {hasContent ? (
+            <div class="edu-modal-content rich-text">
+              <Content />
+            </div>
+          ) : (
+            <p class="edu-modal-empty">Pełna treść pojawi się wkrótce.</p>
+          )}
+        </div>
+      </div>
+    </dialog>
+  ))}
+
+  <script>
+    import { initModalGroup } from '../scripts/modals';
+
+    initModalGroup({
+      dialogSelector: 'dialog.edu-modal',
+      triggerSelector: '.edu-card-open',
+      getDialogId: (button) => button.dataset.dialog,
+    });
+  </script>
+</SiteLayout>

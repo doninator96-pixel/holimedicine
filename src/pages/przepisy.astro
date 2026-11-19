@@ -1,0 +1,199 @@
+---
+import { getCollection, render } from 'astro:content';
+import SiteLayout from '../layouts/SiteLayout.astro';
+import PageHeader from '../components/PageHeader.astro';
+import { withBase } from '../utils/url';
+
+const recipes = await getCollection('przepisy');
+const categories = (await getCollection('kategoriePrzepisow')).sort(
+  (a, b) => a.data.order - b.data.order || a.data.title.localeCompare(b.data.title, 'pl')
+);
+
+type RecipeEntry = (typeof recipes)[number];
+
+const recipesById = new Map(recipes.map((entry) => [entry.id, entry]));
+const problems: string[] = [];
+
+const groups = categories.map((category) => {
+  const seen = new Set<string>();
+  const entries: RecipeEntry[] = [];
+
+  for (const slug of category.data.recipes) {
+    if (seen.has(slug)) {
+      problems.push(`„${slug}” występuje więcej niż raz w kategorii „${category.data.title}”.`);
+      continue;
+    }
+    seen.add(slug);
+
+    const entry = recipesById.get(slug);
+    if (!entry) {
+      problems.push(`Kategoria „${category.data.title}” wskazuje nieistniejący przepis „${slug}”.`);
+      continue;
+    }
+
+    entries.push(entry);
+  }
+
+  return { category, entries };
+});
+
+if (problems.length > 0) {
+  throw new Error(`Problemy z kategoriami przepisów:\n- ${problems.join('\n- ')}`);
+}
+
+// A recipe can belong to several categories, so render one dialog per unique
+// recipe instead of once per card.
+const displayedRecipes = new Map<string, RecipeEntry>();
+for (const { entries } of groups) {
+  for (const entry of entries) displayedRecipes.set(entry.id, entry);
+}
+
+const recipeDialogs = await Promise.all(
+  Array.from(displayedRecipes.values()).map(async (entry) => ({
+    entry,
+    Content: (await render(entry)).Content,
+    hasContent: Boolean(entry.body?.trim()),
+  }))
+);
+---
+
+<SiteLayout title="Przepisy — Natalia i Donat Cupiał">
+  <PageHeader
+    eyebrow="Przepisy"
+    title="Jemy tak, jak zalecamy"
+    lead="Przepisy niskowęglowodanowe, bogate w warzywa i zdrowe tłuszcze — zgodnie z zasadami, które sami stosujemy na co dzień."
+  />
+
+  <section class="section site-container">
+    <div class="subcat-tabs">
+      {groups.map(({ category }, index) => (
+        <button
+          type="button"
+          class:list={['subcat-tab', { active: index === 0 }]}
+          data-target={category.id}
+        >
+          {category.data.title}
+        </button>
+      ))}
+    </div>
+
+    {groups.map(({ category, entries }, index) => (
+      <div class:list={['subcat-panel', { active: index === 0 }]} id={category.id}>
+        {entries.length === 0 ? (
+          <p class="recipe-empty">Brak przepisów w tej kategorii.</p>
+        ) : (
+          <div class="recipes-grid reveal">
+            {entries.map((entry) => (
+              <article class="recipe-card">
+                {entry.data.coverImage && (
+                  <img
+                    src={withBase(entry.data.coverImage)}
+                    alt={entry.data.alt}
+                    class="recipe-img"
+                    loading="lazy"
+                  />
+                )}
+                <div class:list={['recipe-tag', { 'with-img': Boolean(entry.data.coverImage) }]}>
+                  {entry.data.tag}
+                </div>
+                <h3>{entry.data.title}</h3>
+                <p>{entry.data.summary}</p>
+                <button
+                  type="button"
+                  class="recipe-card-open"
+                  aria-haspopup="dialog"
+                  aria-controls={`przepis-${entry.id}`}
+                  aria-label={`Otwórz pełny przepis: ${entry.data.title}`}
+                  data-dialog={`przepis-${entry.id}`}
+                  data-category={category.id}
+                />
+              </article>
+            ))}
+          </div>
+        )}
+      </div>
+    ))}
+  </section>
+
+  {recipeDialogs.map(({ entry, Content, hasContent }) => (
+    <dialog
+      class="recipe-modal"
+      id={`przepis-${entry.id}`}
+      aria-labelledby={`przepis-${entry.id}-title`}
+    >
+      <button
+        type="button"
+        class="recipe-modal-close"
+        aria-label="Zamknij przepis"
+        data-close-dialog
+      >
+        <span aria-hidden="true">×</span>
+      </button>
+
+      <div class="recipe-modal-scroll">
+        {entry.data.coverImage && (
+          <img
+            src={withBase(entry.data.coverImage)}
+            alt={entry.data.alt}
+            class="recipe-modal-img"
+            loading="lazy"
+          />
+        )}
+
+        <div class="recipe-modal-body">
+          {entry.data.tag && <p class="recipe-modal-tag">{entry.data.tag}</p>}
+          <h2 id={`przepis-${entry.id}-title`}>{entry.data.title}</h2>
+          {entry.data.summary && <p class="recipe-modal-summary">{entry.data.summary}</p>}
+
+          {hasContent ? (
+            <div class="recipe-modal-content rich-text">
+              <Content />
+            </div>
+          ) : (
+            <p class="recipe-modal-empty">Pełny przepis pojawi się wkrótce.</p>
+          )}
+        </div>
+      </div>
+    </dialog>
+  ))}
+
+  <script>
+    import { initModalGroup } from '../scripts/modals';
+
+    const tabs = document.querySelectorAll<HTMLButtonElement>('.subcat-tab');
+    const panels = document.querySelectorAll<HTMLElement>('.subcat-panel');
+
+    // Remember which category a dialog belongs to, so opening a deep link can
+    // also reveal the right tab behind the modal.
+    const categoryByDialog = new Map<string, string>();
+    document.querySelectorAll<HTMLButtonElement>('.recipe-card-open').forEach((button) => {
+      const dialogId = button.dataset.dialog;
+      const categoryId = button.dataset.category;
+      if (dialogId && categoryId && !categoryByDialog.has(dialogId)) {
+        categoryByDialog.set(dialogId, categoryId);
+      }
+    });
+
+    const activateTab = (target: string) => {
+      tabs.forEach((tab) => tab.classList.toggle('active', tab.dataset.target === target));
+      panels.forEach((panel) => panel.classList.toggle('active', panel.id === target));
+    };
+
+    tabs.forEach((tab) => {
+      tab.addEventListener('click', () => {
+        const target = tab.dataset.target;
+        if (target) activateTab(target);
+      });
+    });
+
+    initModalGroup({
+      dialogSelector: 'dialog.recipe-modal',
+      triggerSelector: '.recipe-card-open',
+      getDialogId: (button) => button.dataset.dialog,
+      onOpen: (dialog) => {
+        const categoryId = categoryByDialog.get(dialog.id);
+        if (categoryId) activateTab(categoryId);
+      },
+    });
+  </script>
+</SiteLayout>

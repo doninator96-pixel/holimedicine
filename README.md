@@ -1,0 +1,98 @@
+# Holimedicine website
+
+The website for Natalia i Donat Cupiał — family medicine and a holistic approach
+to health. Built with **Astro** (static output), **Tailwind CSS v4**, and
+**Keystatic** as a Git-based CMS.
+
+Live: https://holimedicine.github.io/website/
+
+## Stack
+
+- **Astro** — pages in `src/pages/*.astro`, shared UI in `src/components` and
+  `src/layouts`.
+- **Tailwind CSS v4** (via PostCSS) — the whole theme lives in
+  `src/styles/global.css` (`@theme` tokens + `@layer components`).
+- **Keystatic** — admin UI at `/keystatic/`; content is stored as MDX in the repo.
+- **GitHub Actions** — builds and deploys to GitHub Pages on every push to `main`.
+
+## Content
+
+Three collections:
+
+- `src/content/edukacja/*.mdx` — educational articles.
+- `src/content/przepisy/*.mdx` — recipes.
+- `src/content/kategorie-przepisow/*.json` — recipe categories (name, tab order,
+  ordered recipe list), rendered as tabs on `/przepisy/`. A recipe can appear in
+  multiple categories.
+
+All are editable through the Keystatic admin in dev (requires a GitHub App; see
+`.env.example`). Recipe images live at
+`public/images/przepisy/<slug>/coverImage.jpg`.
+
+## Run locally
+
+### macOS: double-click
+
+1. In Finder, open the project folder.
+2. Double-click `Start Website.command`.
+3. Open http://localhost:4321/ for the site and
+   http://localhost:4321/keystatic/ for the content editor.
+4. Close the Terminal window to stop the site.
+
+The launcher pulls the latest content, installs dependencies if needed, and
+starts the dev server. If macOS blocks it, right-click the file and choose
+**Open**. If it opens in a text editor, run
+`chmod +x "Start Website.command"` once.
+
+### Terminal
+
+Open a terminal in the project folder and run:
+
+```bash
+git pull && npm run dev
+```
+
+First time only: install Node.js 22.12+ and run `npm install`; the Keystatic
+admin also needs the GitHub App credentials in `.env` (see `.env.example`).
+
+Content saved in Keystatic is committed to GitHub and deployed automatically.
+Run `git pull` to bring those commits into the local copy.
+
+## Commands
+
+| Command                            | Action                                                              |
+| ---------------------------------- | ------------------------------------------------------------------- |
+| `npm install`                      | Install dependencies                                                |
+| `npx playwright install chromium`  | Install the browser used by E2E tests (once per machine)            |
+| `npm run dev`                      | Dev server at `localhost:4321` (admin at `/keystatic/`)             |
+| `npm run build`                    | Build, validate links/assets, and run E2E tests                     |
+| `npm run build:site`               | Build and validate links/assets only                                |
+| `npm run test:e2e`                 | Build, validate links/assets, and run E2E tests                     |
+| `npm run test:e2e:ui`              | Open the Playwright UI                                              |
+| `npm run preview`                  | Preview the build at `localhost:4322/website/`                      |
+| `npm run typecheck`                | Generate Astro types and type-check with `tsc`                      |
+| `npm run verify`                   | Typecheck, build, validate, and run E2E tests                       |
+
+## Testing
+
+- E2E tests live in `tests/e2e/` and run with Playwright against the production
+  build under `/website/`.
+- `npm run build` always runs `scripts/check-dist.mjs` (link/asset validation)
+  and the full E2E suite.
+- **Content-only commits** (only `src/content/**` or `public/images/**`) run
+  `npm run build:site` and skip E2E. Keystatic commits are created through the
+  GitHub API, so the local pre-commit hook does not run for them; the same path
+  filter is applied in CI.
+- The pre-commit hook uses Husky. Use `HUSKY=0 git commit ...` only as an
+  emergency bypass; CI will still test the push.
+
+## Deployment
+
+Pushing to `main` triggers `.github/workflows/deploy.yml`, which builds and
+publishes to GitHub Pages. Requires **Settings → Pages → Source = "GitHub
+Actions"** (one-time). You never commit build output.
+
+## Architecture decisions
+
+See [`docs/adr/`](./docs/adr/README.md) for the reasoning behind the framework,
+styling, CMS, content model, deploy and base-path choices.
